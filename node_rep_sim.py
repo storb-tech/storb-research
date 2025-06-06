@@ -1,8 +1,3 @@
-# %% [markdown]
-# TODO:
-# - update node simulations to make it so that each "timeepoch" is an epoch (360 blocks, with each block being 12 seconds)
-# - multiple audits can take place during an epoch
-
 # %%
 import numpy as np
 import matplotlib.pyplot as plt
@@ -17,7 +12,7 @@ class NodeReputationSimulator:
         self.audit_lambda = 0.997
         self.audit_weight = 1.0
         self.audit_dq = 0.96
-        self.initial_alpha = 1000.0
+        self.initial_alpha = 100.0
         self.initial_beta = 0.0
 
         # Initialize reputation
@@ -163,14 +158,25 @@ class NodeReliablity(Enum):
     GARBAGE = 5
 
 
+# set np random seed for reproducibility
+# convert string to seed
+seed = "storb"
+seed = sum(ord(c) for c in seed) % (2**32 - 1)
+np.random.seed(seed)
+
+
 def run_simulation_with_node_churn():
     """Run a simulation with node churn, where nodes are replaced based on their reputation scores."""
     num_nodes = 192
-    epochs = 10000
-    interval = 500
+    epochs = 1000
+    interval = 50
+    audits_per_epoch = 20  # Number of audits per epoch
 
     # Initialize nodes with different reliability levels
     nodes = [NodeReputationSimulator() for _ in range(num_nodes)]
+    # set epochs alive for each node
+    for node in nodes:
+        node.epochs_alive = epochs
     # Assign reliability levels to nodes
     for i, node in enumerate(nodes):
         if i < num_nodes // 4:
@@ -195,32 +201,46 @@ def run_simulation_with_node_churn():
 
     # Track churn metrics
     churn_history = []
+    churn_scores = []  # Track scores of churned nodes
+    churn_epochs = []  # Track when nodes were churned
 
     for epoch in range(1, epochs + 1):
-        # Apply audit results to ALL nodes each epoch
-        for i, node in enumerate(nodes):
-            # Simulate audit results based on node reliability
-            if node.reliability == NodeReliablity.VERY_RELIABLE:
-                result_type = "success" if np.random.random() < 0.999 else "failure"
-            elif node.reliability == NodeReliablity.RELIABLE:
-                result_type = "success" if np.random.random() < 0.99 else "failure"
-            elif node.reliability == NodeReliablity.MODERATELY_UNRELIABLE:
-                result_type = "success" if np.random.random() < 0.9 else "failure"
-            elif node.reliability == NodeReliablity.DEGRADING:
-                if epoch < epochs // 2:
-                    result_type = "success" if np.random.random() < 0.99 else "failure"
-                else:
-                    failure_rate = 0.05 + (epoch / epochs) * 0.45
+        # Run multiple audits per epoch
+        for audit_round in range(audits_per_epoch):
+            # Apply audit results to ALL nodes each audit round
+            for i, node in enumerate(nodes):
+                # Simulate audit results based on node reliability
+                if node.reliability == NodeReliablity.VERY_RELIABLE:
                     result_type = (
-                        "success" if np.random.random() > failure_rate else "failure"
+                        "success" if np.random.random() < 0.9999 else "failure"
                     )
-            else:
-                # GARBAGE nodes fail most of the time
-                result_type = "success" if np.random.random() < 0.5 else "failure"
+                elif node.reliability == NodeReliablity.RELIABLE:
+                    result_type = "success" if np.random.random() < 0.99 else "failure"
+                elif node.reliability == NodeReliablity.MODERATELY_UNRELIABLE:
+                    result_type = "success" if np.random.random() < 0.9 else "failure"
+                elif node.reliability == NodeReliablity.DEGRADING:
+                    if node.epochs_alive < epochs // 2:
+                        result_type = (
+                            "success" if np.random.random() < 0.99 else "failure"
+                        )
+                    else:
+                        failure_rate = 0.05 + (node.epochs_alive / 10) * 0.45
+                        result_type = (
+                            "success"
+                            if np.random.random() > failure_rate
+                            else "failure"
+                        )
+                else:
+                    # GARBAGE nodes fail most of the time
+                    result_type = "success" if np.random.random() < 0.25 else "failure"
 
-            node.apply_audit_result(result_type)
+                node.apply_audit_result(result_type)
 
-        # Node churn logic: every 360 epochs, replace the lowest scoring node with a new one
+        # increment epochs alive for each node
+        for node in nodes:
+            node.epochs_alive += 1
+
+        # Node churn logic: every 2 epochs, replace the lowest scoring nodes with new ones
         # Only apply churn after nodes have some history
         if epoch % 2 == 0:
             # Only consider nodes that have history
@@ -228,9 +248,36 @@ def run_simulation_with_node_churn():
                 (i, node) for i, node in enumerate(nodes) if len(node.history) > 0
             ]
             if nodes_with_history:
-                # replace the 3 lowerst nodes with new nodes
+                # replace the 3 lowest nodes with new nodes
                 nodes_with_history.sort(key=lambda x: x[1].history[-1]["audit_score"])
-                churn_indices = [index for index, _ in nodes_with_history[:3]]
+                churn_indices = [i for i, _ in nodes_with_history[:3]]
+
+                # Record scores and epoch for churned nodes
+                for index in churn_indices:
+                    node = nodes[index]
+                    if len(node.history) > 0:
+                        # churn_scores.append(node.history[-1]["audit_score"])
+                        # churn_epochs.append(epoch)
+
+                        # # Create new node with random reliability
+                        old_reliability = node.reliability
+                        nodes[index] = NodeReputationSimulator()
+                        nodes[index].reliability = old_reliability
+                        # nodes[index] = NodeReputationSimulator()
+                        # # # Assign a new random reliability level
+                        # if np.random.random() < 0.2:
+                        #     nodes[index].reliability = NodeReliablity.VERY_RELIABLE
+                        # elif np.random.random() < 0.5:
+                        #     nodes[index].reliability = NodeReliablity.RELIABLE
+                        # elif np.random.random() < 0.8:
+                        #     nodes[
+                        #         index
+                        #     ].reliability = NodeReliablity.MODERATELY_UNRELIABLE
+                        # else:
+                        #     nodes[index].reliability = NodeReliablity.GARBAGE
+
+                        nodes[index].epochs_alive = 0
+
                 churn_history.extend(churn_indices)
 
         # Plot every 'interval' epochs
@@ -239,14 +286,14 @@ def run_simulation_with_node_churn():
             plot_index = epoch // interval
             ax = fig.add_subplot(num_rows, num_cols, plot_index)
 
-            # get the reliability levels for color mapping
-            reliability_colors = [
-                node.reliability.value for _, node in nodes_with_history
-            ]
-
             # Only include nodes with history
             nodes_with_history = [node for node in nodes if len(node.history) > 0]
             if nodes_with_history:
+                # get the reliability levels for color mapping
+                reliability_colors = [
+                    node.reliability.value for node in nodes_with_history
+                ]
+
                 scores = [
                     node.history[-1]["audit_score"] for node in nodes_with_history
                 ]
@@ -289,8 +336,38 @@ def run_simulation_with_node_churn():
                     fontsize=10,
                     color="white",
                 )
+                ax.text(
+                    0.5,
+                    0.8,
+                    f"Audits per epoch: {audits_per_epoch}",
+                    transform=ax.transAxes,
+                    ha="center",
+                    fontsize=8,
+                    color="gray",
+                )
     plt.tight_layout()
     plt.show()
+
+    # Plot churn scores over time
+    if churn_scores:
+        plt.figure(figsize=(12, 6))
+        plt.scatter(churn_epochs, churn_scores, alpha=0.6, s=30, color="red")
+        plt.plot(churn_epochs, churn_scores, alpha=0.3, color="red", linewidth=1)
+        plt.title("Scores of Churned Nodes Over Time")
+        plt.xlabel("Epoch")
+        plt.ylabel("Node Score at Churn")
+        plt.grid(True, alpha=0.3)
+        # plot horizontal line of minimum score of churned nodes
+        if churn_scores:
+            min_score = min(churn_scores)
+            plt.axhline(
+                y=min_score,
+                color="orange",
+                linestyle="--",
+                label=f"Min Score ({min_score:.4f})",
+            )
+        plt.legend()
+        plt.show()
 
     # also plot the number of times a node was replaced (by their sorted index of score)
     churn_counts = np.zeros(num_nodes)
@@ -302,6 +379,20 @@ def run_simulation_with_node_churn():
     plt.xlabel("Node Index")
     plt.ylabel("Churn Count")
     plt.grid(True, alpha=0.3)
+    plt.show()
+
+    # Print summary statistics
+    total_audits = epochs * audits_per_epoch * num_nodes
+    total_churns = len(churn_scores)
+    print(f"\nSimulation Summary:")
+    print(f"Total epochs: {epochs}")
+    print(f"Audits per epoch: {audits_per_epoch}")
+    print(f"Total audits performed: {total_audits:,}")
+    print(f"Total node churns: {total_churns}")
+    if churn_scores:
+        print(f"Average churn score: {np.mean(churn_scores):.4f}")
+        print(f"Min churn score: {min(churn_scores):.4f}")
+        print(f"Max churn score: {max(churn_scores):.4f}")
 
 
 run_simulation_with_node_churn()
