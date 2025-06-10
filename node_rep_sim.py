@@ -5,15 +5,21 @@ import matplotlib.pyplot as plt
 # by default make matplotlib use dark mode
 plt.style.use("dark_background")
 
+# set np random seed for reproducibility
+# convert string to seed
+seed = "storb"
+seed = sum(ord(c) for c in seed) % (2**32 - 1)
+np.random.seed(seed)
+
 
 class NodeReputationSimulator:
     def __init__(self):
         # Configuration from satellite/reputation/config.go
-        self.audit_lambda = 0.997
+        self.audit_lambda = 0.99
         self.audit_weight = 1.0
         self.audit_dq = 0.96
-        self.initial_alpha = 100.0
-        self.initial_beta = 0.0
+        self.initial_alpha = 500.0
+        self.initial_beta = 1000.0
 
         # Initialize reputation
         self.audit_alpha = self.initial_alpha
@@ -158,19 +164,12 @@ class NodeReliablity(Enum):
     GARBAGE = 5
 
 
-# set np random seed for reproducibility
-# convert string to seed
-seed = "storb"
-seed = sum(ord(c) for c in seed) % (2**32 - 1)
-np.random.seed(seed)
-
-
 def run_simulation_with_node_churn():
     """Run a simulation with node churn, where nodes are replaced based on their reputation scores."""
     num_nodes = 192
     epochs = 1000
-    interval = 50
-    audits_per_epoch = 20  # Number of audits per epoch
+    interval = 50  # Plot every 50 epochs
+    audits_per_epoch = 30  # Number of audits per epoch
 
     # Initialize nodes with different reliability levels
     nodes = [NodeReputationSimulator() for _ in range(num_nodes)]
@@ -212,7 +211,7 @@ def run_simulation_with_node_churn():
                 # Simulate audit results based on node reliability
                 if node.reliability == NodeReliablity.VERY_RELIABLE:
                     result_type = (
-                        "success" if np.random.random() < 0.9999 else "failure"
+                        "success" if np.random.random() < 0.999999 else "failure"
                     )
                 elif node.reliability == NodeReliablity.RELIABLE:
                     result_type = "success" if np.random.random() < 0.99 else "failure"
@@ -240,12 +239,15 @@ def run_simulation_with_node_churn():
         for node in nodes:
             node.epochs_alive += 1
 
-        # Node churn logic: every 2 epochs, replace the lowest scoring nodes with new ones
+        # Node churn logic: every epoch, replace the lowest scoring nodes with new ones
         # Only apply churn after nodes have some history
-        if epoch % 2 == 0:
-            # Only consider nodes that have history
+        if epoch % 1 == 0:
+            # Only consider nodes that have history AND are not immune to churn
+            # Nodes are immune for 10 epochs after registration
             nodes_with_history = [
-                (i, node) for i, node in enumerate(nodes) if len(node.history) > 0
+                (i, node)
+                for i, node in enumerate(nodes)
+                if len(node.history) > 0 and node.epochs_alive >= 10
             ]
             if nodes_with_history:
                 # replace the 3 lowest nodes with new nodes
@@ -259,24 +261,29 @@ def run_simulation_with_node_churn():
                         # churn_scores.append(node.history[-1]["audit_score"])
                         # churn_epochs.append(epoch)
 
-                        # # Create new node with random reliability
-                        old_reliability = node.reliability
                         nodes[index] = NodeReputationSimulator()
-                        nodes[index].reliability = old_reliability
-                        # nodes[index] = NodeReputationSimulator()
-                        # # # Assign a new random reliability level
-                        # if np.random.random() < 0.2:
-                        #     nodes[index].reliability = NodeReliablity.VERY_RELIABLE
-                        # elif np.random.random() < 0.5:
-                        #     nodes[index].reliability = NodeReliablity.RELIABLE
-                        # elif np.random.random() < 0.8:
-                        #     nodes[
-                        #         index
-                        #     ].reliability = NodeReliablity.MODERATELY_UNRELIABLE
-                        # else:
-                        #     nodes[index].reliability = NodeReliablity.GARBAGE
+                        # Assign a new random reliability level
+                        # 20% chance of being very reliable, 30% reliable, 50% moderately unreliable,
+                        # 30% degrading, 20% garbage
+
+                        if np.random.random() < 0.2:
+                            nodes[index].reliability = NodeReliablity.VERY_RELIABLE
+                        elif np.random.random() < 0.3:
+                            nodes[index].reliability = NodeReliablity.RELIABLE
+                        elif np.random.random() < 0.5:
+                            nodes[
+                                index
+                            ].reliability = NodeReliablity.MODERATELY_UNRELIABLE
+                        elif np.random.random() < 0.8:
+                            nodes[index].reliability = NodeReliablity.DEGRADING
+                        else:
+                            nodes[index].reliability = NodeReliablity.GARBAGE
 
                         nodes[index].epochs_alive = 0
+                        # # log new node
+                        # print(
+                        #     f"Node {index} replaced at epoch {epoch} with new node of reliability {nodes[index].reliability.name}"
+                        # )
 
                 churn_history.extend(churn_indices)
 
@@ -302,10 +309,8 @@ def run_simulation_with_node_churn():
                         (score - min(scores)) / (max(scores) - min(scores))
                         for score in scores
                     ]
-                    # sorted indices of the uids for color mapping
-                    sorted_indices = np.argsort(scores)
                     scores = sorted(scores)
-                    scatter = ax.scatter(
+                    ax.scatter(
                         range(len(nodes_with_history)),
                         scores,
                         c=reliability_colors,
@@ -315,7 +320,7 @@ def run_simulation_with_node_churn():
                 else:
                     # All scores are the same
                     scores = [0.0] * len(nodes_with_history)
-                    scatter = ax.scatter(
+                    ax.scatter(
                         range(len(nodes_with_history)),
                         scores,
                         c=reliability_colors,
