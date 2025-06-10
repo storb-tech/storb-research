@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Node Reputation Visualization</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="{{ url_for('static', filename='js/plotly-config.js') }}"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Node Reputation Over Time</h1>
+        <div id="plot"></div>
+        <div id="info" class="info-box">
+            <h2>Node Details</h2>
+            <p id="node-reliability">Reliability: </p>
+            <p id="node-score">Score: </p>
+            <p id="node-epoch">Epoch: </p>
+        </div>
+        <button id="prev">Previous</button>
+        <button id="next">Next</button>
+    </div>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
