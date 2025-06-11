@@ -75,7 +75,6 @@ function displayNodeDetails(event) {
         Node Index: ${pointIndex + 1}<br>
         Reliability: ${nodeData.reliability}<br>
         Audit Score: ${nodeData.audit_score.toFixed(4)}<br>
-        Disqualified: ${nodeData.disqualified ? 'Yes' : 'No'}
     `;
 
     document.getElementById('node-details').innerHTML = details;
