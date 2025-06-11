@@ -11,12 +11,17 @@ pip install -r requirements.txt
 python3 app.py
 # Visit http://127.0.0.1:5000
 ```
+#### Demo
+
+https://github.com/user-attachments/assets/c1ec186c-d395-460b-9f2e-91fa4ef57bf3
 
 #### Notebook Analysis
 ```bash
 # Open node_rep_sim.py in Jupyter or run directly
 python3 node_rep_sim.py
 ```
+#### Preview
+![data](https://github.com/user-attachments/assets/4259aaf0-05e9-4d77-9f8b-9cd0e0133c5a)
 
 ### Files
 
@@ -26,6 +31,3 @@ python3 node_rep_sim.py
 - `simulation.py`: Web app interface (uses shared simulator)
 - `templates/index.html`: Web interface
 
-### Network Simulation Demo
-
-https://github.com/user-attachments/assets/93e1f272-6889-4a7a-b966-b08db26fd3f8
