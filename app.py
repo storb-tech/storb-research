@@ -1,5 +1,5 @@
 from flask import Flask, render_template, jsonify
-from simulation import run_interactive_simulation
+from shared_simulator import run_interactive_simulation
 
 app = Flask(__name__)
 

@@ -234,10 +234,6 @@
                     <div class="stat-label">Average Score</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value" id="disqualified">0</div>
-                    <div class="stat-label">Disqualified</div>
-                </div>
-                <div class="stat-card">
                     <div class="stat-value" id="totalChurns">0</div>
                     <div class="stat-label">Total Churns</div>
                 </div>
@@ -284,10 +280,6 @@
             <div class="info-row">
                 <span>Beta:</span>
                 <span id="nodeBeta">-</span>
-            </div>
-            <div class="info-row">
-                <span>Disqualified:</span>
-                <span id="nodeDisqualified">-</span>
             </div>
         </div>
     </div>
@@ -404,18 +396,6 @@
                 paper_bgcolor: '#2a2a2a',
                 font: { color: '#ffffff' },
                 margin: { t: 50, b: 50, l: 60, r: 20 },
-                shapes: [{
-                    type: 'line',
-                    x0: 0,
-                    x1: nodes.length,
-                    y0: simulationData.config.audit_dq,
-                    y1: simulationData.config.audit_dq,
-                    line: {
-                        color: 'red',
-                        width: 2,
-                        dash: 'dash'
-                    }
-                }]
             };
             
             const config = {
@@ -489,18 +469,6 @@
                 paper_bgcolor: '#2a2a2a',
                 font: { color: '#ffffff' },
                 margin: { t: 50, b: 50, l: 60, r: 20 },
-                shapes: [{
-                    type: 'line',
-                    x0: 0,
-                    x1: sortedNodes.length,
-                    y0: simulationData.config.audit_dq,
-                    y1: simulationData.config.audit_dq,
-                    line: {
-                        color: 'red',
-                        width: 2,
-                        dash: 'dash'
-                    }
-                }]
             };
             
             const config = {
@@ -521,12 +489,10 @@
         function updateStatistics(nodes) {
             const totalNodes = nodes.length;
             const avgScore = nodes.reduce((sum, n) => sum + n.y, 0) / totalNodes;
-            const disqualified = nodes.filter(n => n.disqualified).length;
             const totalChurns = simulationData.churn_events.filter(e => e.epoch <= currentEpoch).length;
             
             document.getElementById('totalNodes').textContent = totalNodes;
             document.getElementById('avgScore').textContent = avgScore.toFixed(3);
-            document.getElementById('disqualified').textContent = disqualified;
             document.getElementById('totalChurns').textContent = totalChurns;
         }
         
@@ -540,7 +506,6 @@
             document.getElementById('nodeTotalAudits').textContent = nodeData.total_audits;
             document.getElementById('nodeAlpha').textContent = nodeData.audit_alpha.toFixed(2);
             document.getElementById('nodeBeta').textContent = nodeData.audit_beta.toFixed(2);
-            document.getElementById('nodeDisqualified').textContent = nodeData.disqualified ? 'Yes' : 'No';
             
             nodeInfo.style.display = 'block';
         }
