@@ -22,8 +22,8 @@ class NodeReputationSimulator:
         # Configuration from satellite/reputation/config.go
         self.audit_lambda = 0.99
         self.audit_weight = 1.0
-        self.initial_alpha = 10.0
-        self.initial_beta = 20.0
+        self.initial_alpha = 18.0
+        self.initial_beta = 36.0
 
         # Initialize reputation
         self.audit_alpha = self.initial_alpha
@@ -63,6 +63,8 @@ class NodeReputationSimulator:
 
         # Record current state
         audit_score = self.audit_alpha / (self.audit_alpha + self.audit_beta)
+        # sigmoid score
+        # audit_score = 1 / (1 + np.exp(-audit_score * 10 + 5))
 
         history_entry = {
             "audit_score": audit_score,
@@ -81,11 +83,11 @@ class NodeReputationSimulator:
     def get_audit_result_for_reliability(self, epochs_total=None):
         """Generate audit result based on node reliability"""
         if self.reliability == NodeReliability.VERY_RELIABLE:
-            return "success" if np.random.random() < 0.999999 else "failure"
+            return "success"
         elif self.reliability == NodeReliability.RELIABLE:
             return "success" if np.random.random() < 0.99 else "failure"
         elif self.reliability == NodeReliability.MODERATELY_UNRELIABLE:
-            return "success" if np.random.random() < 0.9 else "failure"
+            return "success" if np.random.random() < 0.98 else "failure"
         elif self.reliability == NodeReliability.DEGRADING:
             if epochs_total is None or self.epochs_alive < epochs_total // 8:
                 return "success" if np.random.random() < 0.99 else "failure"
@@ -135,37 +137,23 @@ class NetworkSimulator:
 
         # Assign reliability based on distribution
         rand = np.random.random()
-        if rand < 0.2:
+        if rand <= 0.33:
             node.reliability = NodeReliability.VERY_RELIABLE
-        elif rand < 0.4:
+        elif rand <= 0.66:
             node.reliability = NodeReliability.RELIABLE
-        elif rand < 0.6:
+        elif rand <= 1.0:
             node.reliability = NodeReliability.MODERATELY_UNRELIABLE
-        elif rand < 0.8:
-            node.reliability = NodeReliability.DEGRADING
-        else:
-            node.reliability = NodeReliability.GARBAGE
 
-        # if rand < 0.2:
-        #     node.reliability = NodeReliability.VERY_RELIABLE
-        # elif rand < 0.5:
-        #     node.reliability = NodeReliability.RELIABLE
-        # # elif rand < 0.8:
-        # #     node.reliability = NodeReliability.MODERATELY_UNRELIABLE
-        # elif rand < 0.9:
-        #     node.reliability = NodeReliability.DEGRADING
-        # else:
-        #     node.reliability = NodeReliability.GARBAGE
-
-        # node.epochs_alive = 0
+        node.epochs_alive = 0
         return node
 
     def add_nodes_to_network(self, epoch):
         """Add new nodes to the network"""
         # Add nodes until we reach target, but don't exceed nodes_per_epoch_add per epoch
-        nodes_to_add = min(
-            self.nodes_per_epoch_add, max(0, self.num_nodes_target - len(self.nodes))
-        )
+        # nodes_to_add = min(
+        #     self.nodes_per_epoch_add, max(0, self.num_nodes_target - len(self.nodes))
+        # )
+        nodes_to_add = self.num_nodes_target - len(self.nodes)
 
         for _ in range(nodes_to_add):
             new_node = self.create_new_node()
@@ -284,6 +272,7 @@ class NetworkSimulator:
                 "epochs": self.epochs,
                 "nodes_per_epoch_add": self.nodes_per_epoch_add,
                 "nodes_per_epoch_churn": self.nodes_per_epoch_churn,
+                "min_epochs_before_churn": self.min_epochs_before_churn,
             },
         }
 
@@ -292,17 +281,15 @@ def run_interactive_simulation(config=None):
     """Run simulation for interactive visualization (web app)"""
     if config is None:
         config = {
-            "num_nodes_target": 192,
+            "num_nodes_target": 250,
             "epochs": 1000,
             "nodes_per_epoch_add": 3,
             "nodes_per_epoch_churn": 3,
-            "min_epochs_before_churn": 20,
-            # "min_epochs_before_churn": 15,
-            "num_nodes_per_piece_upload": 25,
-            # "num_nodes_per_piece_upload": 10,
-            "num_piece_per_upload": 4,
+            "min_epochs_before_churn": 40,
+            "num_nodes_per_piece_upload": 50,
+            "num_piece_per_upload": 10,
             "num_pieces_download_per_audit": 5,
-            "num_nodes_per_piece_download": 4,
+            "num_nodes_per_piece_download": 10,
         }
 
     simulator = NetworkSimulator(config)
@@ -313,17 +300,15 @@ def run_notebook_simulation(config=None):
     """Run simulation for notebook analysis with more detailed data"""
     if config is None:
         config = {
-            "num_nodes_target": 192,
+            "num_nodes_target": 250,
             "epochs": 1000,
             "nodes_per_epoch_add": 3,
             "nodes_per_epoch_churn": 3,
-            "min_epochs_before_churn": 20,
-            # "min_epochs_before_churn": 15,
-            "num_nodes_per_piece_upload": 25,
-            # "num_nodes_per_piece_upload": 10,
-            "num_piece_per_upload": 4,
+            "min_epochs_before_churn": 40,
+            "num_nodes_per_piece_upload": 50,
+            "num_piece_per_upload": 10,
             "num_pieces_download_per_audit": 5,
-            "num_nodes_per_piece_download": 4,
+            "num_nodes_per_piece_download": 10,
         }
 
     simulator = NetworkSimulator(config)

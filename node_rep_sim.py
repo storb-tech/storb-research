@@ -19,7 +19,7 @@ plt.rcParams["figure.dpi"] = 150
 # convert string to seed
 seed = "storb"
 seed = sum(ord(c) for c in seed) % (2**32 - 1)
-np.random.seed(seed)
+# np.random.seed(seed)
 
 
 # %%
@@ -62,30 +62,18 @@ def test_individual_node_scenarios():
 
 # Run the individual scenario tests
 test_individual_node_scenarios()
+# %%
+result = run_notebook_simulation()
 
 
 # %%
-def plot_network_simulation_snapshots():
+def plot_network_simulation_snapshots(result):
     """Run network simulation and plot snapshots at different epochs with sorted node scores"""
 
     # Run simulation with new zero-start behavior
-    config = {
-        "num_nodes_target": 192,
-        "epochs": 1000,
-        "nodes_per_epoch_add": 3,
-        "nodes_per_epoch_churn": 3,
-        "min_epochs_before_churn": 20,
-        # "min_epochs_before_churn": 15,
-        "num_nodes_per_piece_upload": 25,
-        # "num_nodes_per_piece_upload": 10,
-        "num_piece_per_upload": 4,
-        "num_pieces_download_per_audit": 5,
-        "num_nodes_per_piece_download": 4,
-    }
-
-    result = run_notebook_simulation(config)
     epoch_data = result["epoch_data"]
     churn_events = result["churn_events"]
+    config = result["simulator"].config
 
     # Plot snapshots at specific epochs to match notebook style
     epochs_to_plot = np.arange(100, config["epochs"] + 1, 100).tolist()
@@ -220,17 +208,6 @@ def plot_network_simulation_snapshots():
             ax.set_ylabel("Score")
             ax.grid(True, alpha=0.3)
             ax.set_ylim(0, 1)
-
-            # Add statistics text like in notebook
-            ax.text(
-                0.5,
-                0.9,
-                f"Churn: {len(churn_events)} nodes replaced",
-                transform=ax.transAxes,
-                ha="center",
-                fontsize=10,
-                color="gray",
-            )
         else:
             # No nodes yet
             ax.set_title(f"epoch {data['epoch']}")
@@ -256,7 +233,109 @@ def plot_network_simulation_snapshots():
 
 
 # Run the network simulation
-result = plot_network_simulation_snapshots()
+result = plot_network_simulation_snapshots(result)
+# %%
+
+
+# same plot as above, but ndoes with epochs_alive less than min_epochs_before_churn are orange,
+# and nodes with epochs_alive greater than or equal to min_epochs_before_churn are green
+def plot_network_simulation_snapshots_with_epochs_alive(result):
+    """Run network simulation and plot snapshots at different epochs with epochs_alive coloring"""
+
+    # Run simulation with new zero-start behavior
+    epoch_data = result["epoch_data"]
+    churn_events = result["churn_events"]
+    config = result["simulator"].config
+
+    # Plot snapshots at specific epochs to match notebook style
+    epochs_to_plot = np.arange(100, config["epochs"] + 1, 100).tolist()
+
+    # Create snapshot plots
+    num_plots = len(epochs_to_plot)
+    num_cols = 3
+    num_rows = (num_plots + num_cols - 1) // num_cols
+
+    fig = plt.figure(figsize=(15, 5 * num_rows))
+
+    for i, target_epoch in enumerate(epochs_to_plot):
+        # Find the closest epoch data
+        epoch_idx = min(target_epoch - 1, len(epoch_data) - 1)
+        if epoch_idx < 0:
+            continue
+
+        data = epoch_data[epoch_idx]
+        ax = fig.add_subplot(num_rows + 1, num_cols, i + num_cols + 1)
+
+        if data["nodes"]:
+            # Extract scores and reliability data
+            node_scores = [node["y"] for node in data["nodes"]]
+            node_reliability = [node["reliability"] for node in data["nodes"]]
+            node_epochs_alive = [node["epochs_alive"] for node in data["nodes"]]
+
+            # Create tuples of (score, reliability, epochs_alive) and sort by score
+            node_data = list(zip(node_scores, node_reliability, node_epochs_alive))
+            node_data.sort(key=lambda x: x[0])  # Sort by score (ascending)
+
+            # Extract sorted data
+            sorted_scores = [item[0] for item in node_data]
+            sorted_reliability = [item[1] for item in node_data]
+            sorted_epochs_alive = [item[2] for item in node_data]
+
+            # Normalize scores like in the notebook (optional - can be removed if you want raw scores)
+            if len(set(sorted_scores)) > 1:  # Avoid division by zero
+                min_score = min(sorted_scores)
+                max_score = max(sorted_scores)
+                normalized_scores = [
+                    (score - min_score) / (max_score - min_score)
+                    for score in sorted_scores
+                ]
+            else:
+                # All scores are the same
+                normalized_scores = [0.0] * len(sorted_scores)
+            # Color nodes based on epochs_alive
+            colors = [
+                "orange"
+                if epochs_alive < config["min_epochs_before_churn"]
+                else "green"
+                for epochs_alive in sorted_epochs_alive
+            ]
+            # Create a scatter plot with custom colors
+            scatter = ax.scatter(
+                range(len(normalized_scores)),
+                normalized_scores,  # or sorted_scores for raw values
+                c=colors,
+                s=10,
+                alpha=0.7,
+            )
+            ax.set_title(f"epoch {data['epoch']}")
+            ax.set_xlim(0, len(normalized_scores) - 1)
+            ax.set_xlabel("nodes")
+            ax.set_ylabel("Score")
+            ax.grid(True, alpha=0.3)
+            ax.set_ylim(0, 1)
+        else:
+            # No nodes yet
+            ax.set_title(f"epoch {data['epoch']}")
+            ax.set_xlabel("nodes")
+            ax.set_ylabel("Score")
+            ax.grid(True, alpha=0.3)
+            ax.set_ylim(0, 1)
+            ax.text(
+                0.5,
+                0.5,
+                "No nodes yet",
+                transform=ax.transAxes,
+                ha="center",
+                va="center",
+                fontsize=12,
+                color="gray",
+            )
+    plt.tight_layout()
+    plt.show()
+
+
+# Run the network simulation with epochs_alive coloring
+plot_network_simulation_snapshots_with_epochs_alive(result)
 
 
 # %%
@@ -277,7 +356,7 @@ def analyze_churn_patterns(result):
     fig, axes = plt.subplots(2, 2, figsize=(15, 10))
 
     # Plot 1: Churn scores over time
-    axes[0, 0].scatter(churn_epochs, churn_scores, alpha=0.6, s=30, color="red")
+    axes[0, 0].scatter(churn_epochs, churn_scores, alpha=0.6, s=27, color="red")
     axes[0, 0].plot(churn_epochs, churn_scores, alpha=0.3, color="red", linewidth=1)
     axes[0, 0].set_title("Churn Scores Over Time")
     axes[0, 0].set_xlabel("Epoch")
@@ -348,10 +427,142 @@ def analyze_churn_patterns(result):
 
 # Analyze churn patterns
 analyze_churn_patterns(result)
-
 # %%
 
 
+# Visualize the scores of nodes that have epochs alive == min_epochs_before_churn
+def plot_nodes_with_min_epochs_before_churn(result):
+    """Plot nodes that have reached the minimum epochs before churn"""
+    epoch_data = result["epoch_data"]
+
+    # Filter nodes that have reached the minimum epochs before churn
+    min_epochs = result["simulator"].config["min_epochs_before_churn"]
+    nodes_to_plot = []
+
+    for data in epoch_data:
+        if data["epoch"] >= min_epochs:
+            for node in data["nodes"]:
+                if node["epochs_alive"] == min_epochs:
+                    nodes_to_plot.append(node)
+
+    if not nodes_to_plot:
+        print("No nodes have reached the minimum epochs before churn.")
+        return
+
+    # Extract scores and reliability types
+    scores = [node["y"] for node in nodes_to_plot]
+    reliabilities = [node["reliability"] for node in nodes_to_plot]
+
+    # Create a mapping for reliability types
+    reliability_map = {
+        "VERY_RELIABLE": 1,
+        "RELIABLE": 2,
+        "MODERATELY_UNRELIABLE": 3,
+        "DEGRADING": 4,
+        "GARBAGE": 5,
+    }
+
+    # Map reliability types to colors
+    colors = [reliability_map[rel] for rel in reliabilities]
+
+    # Create the plot
+    plt.figure(figsize=(10, 6))
+    scatter = plt.scatter(range(len(scores)), scores, c=colors, cmap="viridis", s=50)
+    plt.colorbar(scatter, label="Node Reliability Type")
+    plt.title("Nodes with Minimum Epochs Before Churn")
+    plt.xlabel("Node Index")
+    plt.ylabel("Node Score")
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+
+plot_nodes_with_min_epochs_before_churn(result)
+
+
+# %%
+# track nodes after they are older than min_epochs_before_churn,
+# I want to see their scores over time
+# def plot_nodes_over_time(result):
+#     """Plot scores of nodes over time after they reach the minimum epochs before churn"""
+#     epoch_data = result["epoch_data"]
+
+#     # Filter nodes that have reached the minimum epochs before churn
+#     min_epochs = result["simulator"].config["min_epochs_before_churn"]
+#     nodes_to_plot = {}
+
+#     for data in epoch_data:
+#         if data["epoch"] >= min_epochs:
+#             for i, node in enumerate(data["nodes"]):
+#                 if node["epochs_alive"] >= min_epochs:
+#                     if i not in nodes_to_plot:
+#                         nodes_to_plot[i] = []
+#                     nodes_to_plot[i].append((data["epoch"], node["y"]))
+
+#     if not nodes_to_plot:
+#         print("No nodes have reached the minimum epochs before churn.")
+#         return
+
+#     # Create the plot
+#     plt.figure(figsize=(12, 6))
+#     for node_id, scores in nodes_to_plot.items():
+#         epochs, scores = zip(*scores)
+#         plt.plot(epochs, scores, label=f"Node {node_id}", linewidth=2)
+
+#     plt.title("Node Scores Over Time After Minimum Epochs Before Churn")
+#     plt.xlabel("Epoch")
+#     plt.ylabel("Node Score")
+#     plt.grid(True, alpha=0.3)
+#     plt.tight_layout()
+#     plt.show()
+
+
+# plot_nodes_over_time(result)
+
+
+# %%
+# A more sparse version of the above plot,
+# so it's much easier to see the scores of nodes over time
+def plot_nodes_over_time_sparse(result):
+    """Plot scores of nodes over time after they get close to minimum epochs before churn, with sparse sampling"""
+    epoch_data = result["epoch_data"]
+
+    # Filter nodes that have reached the minimum epochs before churn
+    min_epochs = result["simulator"].config["min_epochs_before_churn"]
+    nodes_to_plot = {}
+
+    for data in epoch_data:
+        if data["epoch"] >= min_epochs:
+            for i, node in enumerate(data["nodes"]):
+                if node["epochs_alive"] >= int(0.9 * min_epochs):
+                    if i not in nodes_to_plot:
+                        nodes_to_plot[i] = []
+                    # Sample every 10 epochs
+                    if data["epoch"] % 10 == 0:
+                        nodes_to_plot[i].append((data["epoch"], node["y"]))
+
+    if not nodes_to_plot:
+        print("No nodes have reached the minimum epochs before churn.")
+        return
+
+    # Create the plot
+    plt.figure(figsize=(12, 6))
+    for node_id, scores in nodes_to_plot.items():
+        epochs, scores = zip(*scores)
+        plt.plot(epochs, scores, label=f"Node {node_id}", linewidth=2)
+
+    plt.title("Sparse Node Scores Over Time After Minimum Epochs Before Churn")
+    plt.xlabel("Epoch")
+    plt.ylabel("Node Score")
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+
+plot_nodes_over_time_sparse(result)
+
+
+# %%
 # Plot distribution of the node types over time
 def plot_node_type_distribution(result):
     """Plot the distribution of node types over time"""
@@ -386,18 +597,8 @@ def plot_node_type_distribution(result):
     for rel, counts in reliability_counts.items():
         plt.plot(epochs, counts, label=rel.replace("_", " "), linewidth=2)
 
-    config = result["simulator"].config
-    #     config = {
-    #     "num_nodes_target": 192,
-    #     "epochs": 1000,
-    #     "nodes_per_epoch_add": 3,
-    #     "nodes_per_epoch_churn": 3,
-    #     "min_epochs_before_churn": 14,
-    #     "num_nodes_per_piece_upload": 20,
-    #     "num_piece_per_upload": 4,
-    #     "num_pieces_download_per_audit": 5,
-    #     "num_nodes_per_piece_download": 4,
-    # }
+    sim: NodeReputationSimulator = result["simulator"]
+    config = sim.config
 
     plt.title(
         f"Node Type Distribution Over Time\nimmunity period: {config['min_epochs_before_churn']}, num node/piece upload: {config['num_nodes_per_piece_upload']}, num piece/upload: {config['num_piece_per_upload']}, num pieces/download: {config['num_pieces_download_per_audit']}, num nodes per piece/download: {config['num_nodes_per_piece_download']}"
